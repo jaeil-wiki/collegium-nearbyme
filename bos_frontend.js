@@ -1,19 +1,38 @@
+// mocks & constants
+const apiHost = 'https://collegium.runafter.build';
+const deployerAccountId = '58423e7fe4bbc6956ea637d23cbeedee8ec23873fcd93bafb69086af625563e9';
+const places = ["Lobby", "Cafeteria", "ConfRoom1", "ConfRoom2"];
+// Props
 const userAccountId = props.accountId || context.accountId;
-console.log(userAccountId);
-const p = Social.getr(`${userAccountId}/profile`);
+// States
+State.init({
+  place: props.place || 0,
+  users: [],
+  attendees: [],
+});
+// methods
+const getProfile = (accountId) => {
+  const p = Social.getr(`${accountId}/profile`);
+  const name = p?.name;
+  const image = p?.image;
+  const imageUrl =
+    image && image.ipfs_cid
+      ? `https://ipfs.near.social/ipfs/${image?.ipfs_cid}`
+      : "https://thewiki.io/static/media/sasha_anon.6ba19561.png";
 
-const userName = p?.name;
-const userImage = p?.image;
-const imageUrl = image.ipfs_cid
-  ? `https://ipfs.near.social/ipfs/${image?.ipfs_cid}`
-  : "https://thewiki.io/static/media/sasha_anon.6ba19561.png";
+  return {
+    name,
+    imageUrl,
+  };
+};
 
+// Sub Components
 const Theme = styled.div`
   ${
-  fetch(
-    "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-  ).body
-}
+          fetch(
+                  "https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+          ).body
+  }
 `;
 
 const Banner = () => (
@@ -48,53 +67,69 @@ const ProfileCard = ({ name, accountId, imageUrl }) => (
 );
 
 const BesideUsers = () => {
-  const [users, setUsers] = useState([]);
-  setInterval(() => {
-    console.log("refresh");
-    setUsers(fetch("https://asdf.jaeil.wiki/room/1").body);
-  }, 3000);
-
-  console.log(users);
   return (
     <div className="row">
-      {users.map((accountId) => {
-        const p = Social.getr(`${accountId}/profile`);
-        const name = p?.name;
-        const image = p?.image;
-        const imageUrl = image.ipfs_cid
-          ? `https://ipfs.near.social/ipfs/${image?.ipfs_cid}`
-          : "https://thewiki.io/static/media/sasha_anon.6ba19561.png";
-        return (
-          <div className="col-6">
-            <ProfileCard
-              name={name}
-              accountId={accountId}
-              imageUrl={imageUrl}
-            />
+      {!state.users ||
+        (state.users.filter((accountId) => accountId !== userAccountId)
+          .length === 0 && (
+          <div class="fs-5 my-5 w-100 text-center" style={{ color: "gray" }}>
+            {" "}
+            There is no users in place{" "}
           </div>
-        );
-      })}
+        ))}
+      {state.users &&
+        state.users
+          .filter((accountId) => accountId !== userAccountId)
+          .map((accountId) => {
+            const { name, imageUrl } = getProfile(accountId);
+            return (
+              <div className="col-6">
+                <ProfileCard
+                  name={name}
+                  accountId={accountId}
+                  imageUrl={imageUrl}
+                />
+              </div>
+            );
+          })}
     </div>
   );
 };
 
-const Attendies = () => {
-  const users = fetch("https://asdf.jaeil.wiki/room/1").body;
+const Attendees = () => {
   return (
     <div className="row">
-      {users.map((accountId) => {
-        const p = Social.getr(`${accountId}/profile`);
-        const name = p?.name;
-        return (
-          <div className="col-4">
-            <div className="navbar bg-body-tertiary border rounded px-3 mb-3 justify-content-center">
-              <div className="text-truncate">{name}</div>
+      {state.attendees &&
+        state.attendees.map((accountId) => {
+          const { name } = getProfile(accountId);
+          return (
+            <div className="col-4">
+              <a
+                href={`https://near.social/mob.near/widget/ProfilePage?accountId=${accountId}`}
+              >
+                <div className="navbar bg-body-tertiary border rounded px-3 mb-3 justify-content-center">
+                  <div className="text-truncate">{name}</div>
+                </div>
+              </a>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
     </div>
   );
+};
+
+const beaconAdvertise = () => {
+  asyncFetch(`${apiHost}/room/${state.place}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    cache: "no-store",
+    body: JSON.stringify({
+      accountId: userAccountId,
+    }),
+  });
 };
 
 const BeaconSimulator = () => {
@@ -105,34 +140,59 @@ const BeaconSimulator = () => {
     >
       <div className="row">
         <div className="fs-3">Beacon Simulator</div>
+        <div className="fs-5">You are in: {places[state.place]}</div>
       </div>
       <div className="row">
-        {["Lobby", "Cafeteria", "ConfRoom1", "ConfRoom2"].map(
-          (location, idx) => (
-            <div className="col-3 mb-2">
-              <div className="btn btn-primary w-100">{location}</div>
+        {places &&
+          places.map((location, idx) => (
+            <div key={idx} className="col-3 mb-2">
+              <a
+                href={`https://near.social/${deployerAccountId}/widget/NearbyMe?place=${idx}`}
+              >
+                <div className="btn btn-primary w-100">{location}</div>
+              </a>
             </div>
-          )
-        )}
+          ))}
       </div>
     </div>
   );
 };
+
+const { name, imageUrl } = getProfile(userAccountId);
+const fetchScanned = async () => {
+  asyncFetch(`${apiHost}/room/${state.place}`, {
+    cache: "no-store",
+  }).then((res) => {
+    State.update({ users: res.body });
+  });
+};
+
+const fetchAttendees = async () => {
+  asyncFetch(`${apiHost}/room`, {
+    cache: "no-store",
+  }).then((res) => {
+    State.update({ attendees: res.body });
+  });
+};
+useEffect(() => {
+  fetchScanned();
+  fetchAttendees();
+  setInterval(() => {
+    fetchScanned();
+    beaconAdvertise();
+  }, 3000);
+}, []);
 
 return (
   <Theme>
     <div className="container-fluid mt-3 pb-3">
       <BeaconSimulator />
       <Banner />
-      <ProfileCard
-        name={userName}
-        accountId={userAccountId}
-        imageUrl={imageUrl}
-      />
+      <ProfileCard name={name} accountId={userAccountId} imageUrl={imageUrl} />
       <p className="fs-3">Builders nearby me</p>
       <BesideUsers />
-      <p className="fs-3">Collegium Contest Attendies</p>
-      <Attendies />
+      <p className="fs-3">Collegium Contest Attendees</p>
+      <Attendees />
     </div>
   </Theme>
 );
