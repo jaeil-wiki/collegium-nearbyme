@@ -1,7 +1,7 @@
 import {NextResponse} from "next/server";
 import {getMockAdvertisements, setMockAdvertisement, setMockAttendee} from "@/lib/storage";
 
-export async function GET(req, res, {params}) {
+export async function GET(req, {params}) {
   const {roomId} = params
   const users = await getMockAdvertisements(roomId || 0)
   return NextResponse.json(users.map((k) => k.split(':').slice(-1)[0]))
